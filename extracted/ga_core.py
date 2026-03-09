@@ -287,14 +287,9 @@ class OFNGeneticAlgorithm:
         pop = self.population
         fit = self.fitness_vals
 
-        # Elityzm (guard: działa także gdy elitism_n >= pop_size)
-        _en = min(cfg.elitism_n, len(fit))
-        elite_idx = (
-            np.argpartition(fit, _en - 1)[:_en]
-            if _en > 0
-            else np.array([], dtype=int)
-        )
-        elite = pop[elite_idx].copy()
+        # Elityzm
+        elite_idx = np.argpartition(fit, cfg.elitism_n)[:cfg.elitism_n]
+        elite     = pop[elite_idx].copy()
 
         # Selekcja → krzyżowanie → mutacja
         parent_idx = tournament_select(fit, cfg.pop_size, cfg.tournament_k, self.rng)
@@ -303,8 +298,7 @@ class OFNGeneticAlgorithm:
                                      cfg.mutation_sigma, cfg.gene_bounds, self.rng)
 
         # Wstawiamy elity
-        if _en > 0:
-            offspring[-_en:] = elite
+        offspring[-cfg.elitism_n:] = elite
 
         # Ewaluacja
         new_fit = fitness_batch(offspring, self.target)
