@@ -1,0 +1,25 @@
+# Environment
+venv*/
+.venv/
+.env
+
+# Dependencies
+deps*/
+extracted/
+libs_agent/
+
+# Build and metadata
+*.egg-info/
+__pycache__/
+*.pyc
+
+# Local Configs
+mpg_config/
+.gemini/
+.idea/
+.vscode/
+
+# Assets
+*.png
+*.jpg
+*.docx

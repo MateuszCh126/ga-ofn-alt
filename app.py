@@ -122,6 +122,48 @@ def _ax_defaults(ax):
 class OFNGAApp:
     def __init__(self, root: tk.Tk):
         self.root = root
+        
+        # --- UI Attributes & Sliders (Declarations for static analysis) ---
+        self._gen_lbl: Optional[tk.Label] = None
+        self._left: Optional[tk.Frame] = None
+        self._top_frame: Optional[tk.Frame] = None
+        self._evo_outer: Optional[tk.Frame] = None
+        self._sb: Optional[StatusBar] = None
+        self._tgt_preview_frame: Optional[tk.Frame] = None
+        self._btn_run: Optional[tk.Button] = None
+        self._btn_stop: Optional[tk.Button] = None
+        self._canvas: Optional[FigureCanvasTkAgg] = None
+        self._fig: Optional[Figure] = None
+        self._evo_canvas: Optional[FigureCanvasTkAgg] = None
+        self._evo_fig: Optional[Figure] = None
+        
+        self.s_ta: Optional[LabeledSlider] = None
+        self.s_tb: Optional[LabeledSlider] = None
+        self.s_tc: Optional[LabeledSlider] = None
+        self.s_td: Optional[LabeledSlider] = None
+        self.s_genes: Optional[LabeledSlider] = None
+        self.s_blo: Optional[LabeledSlider] = None
+        self.s_bhi: Optional[LabeledSlider] = None
+        self.s_pop: Optional[LabeledSlider] = None
+        self.s_gen: Optional[LabeledSlider] = None
+        self.s_mut: Optional[LabeledSlider] = None
+        self.s_sigma: Optional[LabeledSlider] = None
+        self.s_cross: Optional[LabeledSlider] = None
+        self.s_tour: Optional[LabeledSlider] = None
+        self.s_elite: Optional[LabeledSlider] = None
+        self.s_refresh: Optional[LabeledSlider] = None
+
+        self._ax_fit = None; self._ax_best = None; self._ax_cmp = None
+        self._ax_heat = None; self._ax_profile = None
+        self._ln_best = None; self._ln_mean = None
+        self._tgt_prev_fig = None; self._tgt_prev_ax = None
+        self._tgt_prev_canvas = None
+        self._evo_info = None; self._evo_img = None
+        self._evo_vl = None; self._evo_sv = None
+        self._evo_sl = None; self._evo_gl = None
+        self._evo_matrix: Optional[np.ndarray] = None
+
+        # --- Setup & Initialization ---
         self._setup_window()
         self._setup_style()
         self._build_ui()
@@ -136,8 +178,6 @@ class OFNGAApp:
         self._n_gen_total = 0
         self._refresh_every = 5
 
-        # heatmapa
-        self._evo_matrix: Optional[np.ndarray] = None
         self._evo_fit_max: float = 1.0
         self._evo_cursor:  int   = 0
 
@@ -202,22 +242,40 @@ class OFNGAApp:
         cv = tk.Canvas(parent, bg=PANEL, highlightthickness=0)
         sb = ttk.Scrollbar(parent, orient="vertical", command=cv.yview)
         inner = tk.Frame(cv, bg=PANEL)
-        cv.pack(side="left", fill="both", expand=True); sb.pack(side="right", fill="y")
+        sb.pack(side="right", fill="y")
+        cv.pack(side="left", fill="both", expand=True)
         cv.configure(yscrollcommand=sb.set)
         _id = cv.create_window((0,0), window=inner, anchor="nw")
 
         def _c(e):
-            cv.configure(scrollregion=cv.bbox("all"))
+            # Update scrollregion using requested height for more reliability
+            inner.update_idletasks()
+            cv.configure(scrollregion=(0, 0, inner.winfo_reqwidth(), inner.winfo_reqheight()))
+            # Match inner frame width to canvas width
             cv.itemconfig(_id, width=cv.winfo_width())
-        inner.bind("<Configure>", _c); cv.bind("<Configure>", _c)
-        cv.bind_all("<MouseWheel>", lambda e: cv.yview_scroll(int(-e.delta/120), "units"))
+        
+        inner.bind("<Configure>", _c)
+        cv.bind("<Configure>", _c)
+        
+        def _on_mousewheel(e):
+            # macOS scroll tuning: significantly increased multiplier
+            if e.delta:
+                cv.yview_scroll(int(-5 * e.delta), "units")
+            elif e.num == 4:
+                cv.yview_scroll(-5, "units")
+            elif e.num == 5:
+                cv.yview_scroll(5, "units")
 
-        P = dict(padx=8, pady=3, fill="x")
+        cv.bind_all("<MouseWheel>", _on_mousewheel)
+        cv.bind_all("<Button-4>", _on_mousewheel)
+        cv.bind_all("<Button-5>", _on_mousewheel)
+        inner.bind("<MouseWheel>", _on_mousewheel) # Double binding for better capture
+
         def H(t): return _lbl(inner, t, font=FONT_H, color=ACCENT)
         def S(): _sep(inner).pack(fill="x", padx=6, pady=3)
 
         # TARGET OFN — 4 parametry trapezu
-        H("▶  TARGET OFN  (trapezoid)").pack(**P); S()
+        H("▶  TARGET OFN  (trapezoid)").pack(padx=8, pady=3, fill="x"); S()
         _lbl(inner, "pyofn.trapezoidal(a, b, c, d)", color=MUTED, font=("Consolas",8)).pack(anchor="w", padx=8, pady=(0,2))
 
         # Podgląd mini wykresiku targetu
@@ -226,34 +284,34 @@ class OFNGAApp:
         self._tgt_preview_frame.pack_propagate(False)
         self._build_target_preview(self._tgt_preview_frame)
 
-        self.s_ta = LabeledSlider(inner, "a  (lewy nośnik)",   0, 10, 2.0, cb=self._on_target_slide); self.s_ta.pack(**P)
-        self.s_tb = LabeledSlider(inner, "b  (plateau lewy)",  0, 10, 4.0, cb=self._on_target_slide); self.s_tb.pack(**P)
-        self.s_tc = LabeledSlider(inner, "c  (plateau prawy)", 0, 10, 6.0, cb=self._on_target_slide); self.s_tc.pack(**P)
-        self.s_td = LabeledSlider(inner, "d  (prawy nośnik)",  0, 10, 8.0, cb=self._on_target_slide); self.s_td.pack(**P)
+        self.s_ta = LabeledSlider(inner, "a  (lewy nośnik)",   0, 10, 2.0, cb=self._on_target_slide); self.s_ta.pack(padx=8, pady=3, fill="x")
+        self.s_tb = LabeledSlider(inner, "b  (plateau lewy)",  0, 10, 4.0, cb=self._on_target_slide); self.s_tb.pack(padx=8, pady=3, fill="x")
+        self.s_tc = LabeledSlider(inner, "c  (plateau prawy)", 0, 10, 6.0, cb=self._on_target_slide); self.s_tc.pack(padx=8, pady=3, fill="x")
+        self.s_td = LabeledSlider(inner, "d  (prawy nośnik)",  0, 10, 8.0, cb=self._on_target_slide); self.s_td.pack(padx=8, pady=3, fill="x")
 
         tk.Button(inner, text="↯  Zastosuj nowy cel",
                   bg=ACCENT, fg=DARK, font=("Segoe UI",9,"bold"),
                   relief="flat", cursor="hand2",
                   command=self._apply_target).pack(padx=8, pady=(2,6), fill="x")
 
-        S(); H("▶  CHROMOSOM").pack(**P)
-        self.s_genes = LabeledSlider(inner, "Liczba genów",  2, 50, 10, fmt="{:.0f}"); self.s_genes.pack(**P)
-        self.s_blo   = LabeledSlider(inner, "Zakres min", -10,  0,  0, fmt="{:.1f}"); self.s_blo.pack(**P)
-        self.s_bhi   = LabeledSlider(inner, "Zakres max",   0, 20, 10, fmt="{:.1f}"); self.s_bhi.pack(**P)
+        S(); H("▶  CHROMOSOM").pack(padx=8, pady=3, fill="x")
+        self.s_genes = LabeledSlider(inner, "Liczba genów",  2, 50, 10, fmt="{:.0f}"); self.s_genes.pack(padx=8, pady=3, fill="x")
+        self.s_blo   = LabeledSlider(inner, "Zakres min", -10,  0,  0, fmt="{:.1f}"); self.s_blo.pack(padx=8, pady=3, fill="x")
+        self.s_bhi   = LabeledSlider(inner, "Zakres max",   0, 20, 10, fmt="{:.1f}"); self.s_bhi.pack(padx=8, pady=3, fill="x")
 
-        S(); H("▶  POPULACJA").pack(**P)
-        self.s_pop = LabeledSlider(inner, "Rozmiar populacji",  10, 1000, 150, fmt="{:.0f}"); self.s_pop.pack(**P)
-        self.s_gen = LabeledSlider(inner, "Liczba pokoleń",     10, 2000, 300, fmt="{:.0f}"); self.s_gen.pack(**P)
+        S(); H("▶  POPULACJA").pack(padx=8, pady=3, fill="x")
+        self.s_pop = LabeledSlider(inner, "Rozmiar populacji",  10, 1000, 150, fmt="{:.0f}"); self.s_pop.pack(padx=8, pady=3, fill="x")
+        self.s_gen = LabeledSlider(inner, "Liczba pokoleń",     10, 2000, 300, fmt="{:.0f}"); self.s_gen.pack(padx=8, pady=3, fill="x")
 
-        S(); H("▶  OPERATORY GA").pack(**P)
-        self.s_mut   = LabeledSlider(inner, "Mut. rate",   0,  .5, .05, fmt="{:.3f}"); self.s_mut.pack(**P)
-        self.s_sigma = LabeledSlider(inner, "Mut. sigma", .01, 2.,  .3, fmt="{:.2f}"); self.s_sigma.pack(**P)
-        self.s_cross = LabeledSlider(inner, "Cross. rate",  0,  1.,  .8, fmt="{:.2f}"); self.s_cross.pack(**P)
-        self.s_tour  = LabeledSlider(inner, "Turniej k",    2, 10,   3,  fmt="{:.0f}"); self.s_tour.pack(**P)
-        self.s_elite = LabeledSlider(inner, "Elityzm n",    0, 20,   5,  fmt="{:.0f}"); self.s_elite.pack(**P)
+        S(); H("▶  OPERATORY GA").pack(padx=8, pady=3, fill="x")
+        self.s_mut   = LabeledSlider(inner, "Mut. rate",   0,  .5, .05, fmt="{:.3f}"); self.s_mut.pack(padx=8, pady=3, fill="x")
+        self.s_sigma = LabeledSlider(inner, "Mut. sigma", .01, 2.,  .3, fmt="{:.2f}"); self.s_sigma.pack(padx=8, pady=3, fill="x")
+        self.s_cross = LabeledSlider(inner, "Cross. rate",  0,  1.,  .8, fmt="{:.2f}"); self.s_cross.pack(padx=8, pady=3, fill="x")
+        self.s_tour  = LabeledSlider(inner, "Turniej k",    2, 10,   3,  fmt="{:.0f}"); self.s_tour.pack(padx=8, pady=3, fill="x")
+        self.s_elite = LabeledSlider(inner, "Elityzm n",    0, 20,   5,  fmt="{:.0f}"); self.s_elite.pack(padx=8, pady=3, fill="x")
 
-        S(); H("▶  WYŚWIETLANIE").pack(**P)
-        self.s_refresh = LabeledSlider(inner, "Odśwież co N gen.", 1, 50, 5, fmt="{:.0f}"); self.s_refresh.pack(**P)
+        S(); H("▶  WYŚWIETLANIE").pack(padx=8, pady=3, fill="x")
+        self.s_refresh = LabeledSlider(inner, "Odśwież co N gen.", 1, 50, 5, fmt="{:.0f}"); self.s_refresh.pack(padx=8, pady=3, fill="x")
 
         S()
         self._btn_run = tk.Button(inner, text="▶  START", bg=GREEN, fg=DARK,
