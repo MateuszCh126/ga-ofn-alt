@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# local virtualenvs
+.venv/
+venv/
+
+# build artifacts
+build/
+dist/
+*.egg-info/
+
+# matplotlib / demos
+demo_output/
+
+# Office temporary/lock files
+~$*.docx
